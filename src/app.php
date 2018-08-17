@@ -6,6 +6,7 @@ use RuntimeException;
 use Silex\Application;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpKernel\Event\GetResponseForExceptionEvent;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
@@ -103,7 +104,13 @@ $app->post(
 );
 
 $app->error(
-    static function (Exception $e) use ($app) {
+/**
+ * @param Exception $e
+ *
+ * @return Response
+ */
+    static function (Exception $e, Request $request, $code, GetResponseForExceptionEvent $event) use ($app) {
+        $event->allowCustomResponseCode();
         if ($e instanceof NotFoundHttpException) {
             /** @var Request $request */
             $request = $app['request_stack']->getCurrentRequest();
@@ -138,7 +145,13 @@ $app->error(
                 ++$expectations[$pos]['runs'];
                 $app['storage']->store($request, 'expectations', $expectations);
 
-                return $expectation['response'];
+                /** @var Response $response */
+                $response = $expectation['response'];
+                if ($response->headers->has('X-Status-Code')) {
+                    $response->setStatusCode($response->headers->get('X-Status-Code'));
+                }
+
+                return $response;
             }
 
             return $notFoundResponse;
